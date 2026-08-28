@@ -1,5 +1,13 @@
 # cpx guardian — painel exclusivo de joaodayz.
 
+## Atualização: Enviar votação SSU
+
+No `/guardian`, selecione **Enviar votação SSU**. Edite os três horários, a mensagem e a duração; depois confira a prévia e escolha **Publicar votação**. O botão **Editar mensagem e horários** reabre o rascunho antes de publicar. Preserve `{h1}`, `{h2}` e `{h3}` na mensagem: os horários são preenchidos automaticamente.
+
+O canal é fixo: `1536778465444106331`. O envio inclui o embed **🔥・SSU**, a convocação com `@everyone` e uma enquete nativa com uma opção por pessoa. Padrões: 17:50, 18:30, 19:00 e 24 horas de votação. O bot também precisa da permissão **Enviar enquetes** nesse canal. A prévia é privada, expira em 5 minutos e não menciona ninguém. Editar invalida a confirmação anterior; cancelar não publica.
+
+Para aplicar a atualização, envie a pasta `backend` completa do pacote **cpx-guardian-ssu-v1.zip** ao repositório ligado ao Railway. Confirme que `ssu.mjs` e `embeds.mjs` estão presentes e aguarde a nova implantação. Nenhuma votação é publicada durante a instalação. Os votos ficam no Discord; os rascunhos e registros usam o SQLite existente no volume persistente.
+
 Este módulo acrescenta `/cpxpainel`, com `/guardian` como atalho, `/warn` e `/userinfo`. O acesso é conferido no servidor pelo ID **1300178869319635004**, não pelo nome de usuário nem pelo cargo. O Application ID informado é **1542567571255984168**.
 
 **Não foi instalado no seu servidor automaticamente.** O código e os arquivos de hospedagem estão prontos para configurar. Nenhum token foi incluído. Os testes usam respostas simuladas do Discord.
@@ -23,7 +31,7 @@ As funções anteriores de RP em `/cpx` conservam suas permissões: cidadãos, a
    `https://cpx-roleplay.flowy-shell-1951.chatgpt.site/api/cpx/auth/callback`
 4. Copie Application ID, Public Key, Client Secret e Bot Token para os campos privados da hospedagem. Não envie os dois segredos no chat ou no repositório.
 5. Abra o arquivo `public/invite.html`, clique em **Gerar convite** e depois **Adicionar ao Discord**. Pode abri-lo como arquivo local, sem servidor.
-6. Autorize o bot no seu servidor. As permissões são: Ver canais, Enviar mensagens, Ler histórico, Gerenciar canais, Moderar membros, Expulsar membros e Banir membros. Não conceda Administrador. Gerenciar canais é necessário para criar a categoria.
+6. Autorize o bot no seu servidor. As permissões são: Ver canais, Enviar mensagens, Ler histórico, Gerenciar canais, Moderar membros, Expulsar membros, Banir membros e Mencionar @everyone em anúncios confirmados. Não conceda Administrador. Gerenciar canais é necessário para criar a categoria.
 7. Posicione o cargo do bot acima dos membros que serão moderados. Sua conta também precisa ter a permissão correspondente e hierarquia suficiente. Donos do servidor, administradores, bots e sua própria conta são protegidos pelo módulo.
 8. O bot usa interações HTTP: não precisa de Message Content Intent nem de Server Members Intent para a consulta individual por ID. Pode aparecer offline na lista, pois não mantém conexão Gateway de presença; isso não indica sozinho que os comandos HTTP falharam.
 
@@ -62,7 +70,7 @@ Use `backend/.env.example` como referência. Na hospedagem, use campos privados 
 | `DISCORD_ADMIN_ROLE_ID` | ID do cargo administrador do RP |
 | `DISCORD_MAYOR_ROLE_ID` | ID do cargo prefeito |
 | `DISCORD_GOVERNMENT_ROLE_ID` | ID do cargo governo |
-| `DISCORD_ANNOUNCEMENT_CHANNEL_ID` | ID do canal permitido para anúncios |
+| `DISCORD_ANNOUNCEMENT_CHANNEL_ID` | Opcional; o painel usa o canal fixo `1493474807990452345` |
 | `PUBLIC_ORIGIN` | `https://cpx-roleplay.flowy-shell-1951.chatgpt.site` |
 | `CPX_PROXY_SECRET` | Segredo aleatório de pelo menos 32 caracteres, igual no site e no serviço |
 | `DATA_DIR` | `/data` no volume persistente |
