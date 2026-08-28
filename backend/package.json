@@ -1,0 +1,14 @@
+{
+  "name": "cpx-guardian",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node --env-file=.env server.mjs",
+    "register": "node --env-file=.env register-commands.mjs",
+    "profile": "node --env-file=.env configure-profile.mjs"
+  }
+}
