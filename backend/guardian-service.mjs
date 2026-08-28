@@ -1,7 +1,7 @@
 import {discord} from './bot.mjs';
 import {contextualAnswer,knowledge,guardianCommands,ensureGuardian} from '../lib/cpx/guardian.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
-export function roleFromMember(member,e){return [['admin',e.DISCORD_ADMIN_ROLE_ID],['mayor',e.DISCORD_MAYOR_ROLE_ID],['deputy',e.DISCORD_DEPUTY_ROLE_ID],['government',e.DISCORD_GOVERNMENT_ROLE_ID]].find(([,id])=>id&&member.roles.includes(id))?.[0]||'citizen';}
+export function roleFromMember(member,e){return [['admin',e.DISCORD_ADMIN_ROLE_ID],['mayor',e.DISCORD_MAYOR_ROLE_ID],['government',e.DISCORD_GOVERNMENT_ROLE_ID]].find(([,id])=>id&&member.roles.includes(id))?.[0]||'citizen';}
 export function verifyHierarchy({guild,roles,actor,target,bot}){
  const owned=actor.user.id===guild.owner_id;
  const permissions=m=>roles.filter(r=>r.id===guild.id||m.roles.includes(r.id)).reduce((bits,r)=>bits|BigInt(r.permissions),0n);

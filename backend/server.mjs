@@ -1,3 +1,4 @@
+import {createOwnerService,OWNER_PERMISSIONS} from './owner-service.mjs';
 import {createServer} from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {mkdirSync} from 'node:fs';
@@ -8,14 +9,14 @@ import {createGuardianService} from './guardian-service.mjs';
 import {createInteractionHandler} from './interactions.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
 const e=process.env;
-for(const name of ['DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','DISCORD_BOT_TOKEN','DISCORD_GUILD_ID','DISCORD_ADMIN_ROLE_ID','DISCORD_MAYOR_ROLE_ID','DISCORD_DEPUTY_ROLE_ID','DISCORD_GOVERNMENT_ROLE_ID','CPX_PROXY_SECRET','PUBLIC_ORIGIN'])if(!e[name])throw new Error('Configure '+name+' no ambiente privado do serviço.');
+for(const name of ['DISCORD_PUBLIC_KEY','DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','DISCORD_BOT_TOKEN','DISCORD_GUILD_ID','DISCORD_ADMIN_ROLE_ID','DISCORD_MAYOR_ROLE_ID','DISCORD_GOVERNMENT_ROLE_ID','CPX_PROXY_SECRET','PUBLIC_ORIGIN'])if(!e[name])throw new Error('Configure '+name+' no ambiente privado do serviço.');
 if(e.CPX_PROXY_SECRET.length<32)throw new Error('CPX_PROXY_SECRET deve ter pelo menos 32 caracteres aleatórios.');
-for(const name of ['DISCORD_CLIENT_ID','DISCORD_GUILD_ID','DISCORD_ADMIN_ROLE_ID','DISCORD_MAYOR_ROLE_ID','DISCORD_DEPUTY_ROLE_ID','DISCORD_GOVERNMENT_ROLE_ID'])if(!/^\d{17,22}$/.test(e[name]))throw new Error('ID inválido: '+name);
+for(const name of ['DISCORD_CLIENT_ID','DISCORD_GUILD_ID','DISCORD_ADMIN_ROLE_ID','DISCORD_MAYOR_ROLE_ID','DISCORD_GOVERNMENT_ROLE_ID'])if(!/^\d{17,22}$/.test(e[name]))throw new Error('ID inválido: '+name);
 const origin=new URL(e.PUBLIC_ORIGIN).origin;if(!origin.startsWith('https://'))throw new Error('PUBLIC_ORIGIN deve usar HTTPS.');
 const callback=origin+'/api/cpx/auth/callback';
 const dataDir=e.DATA_DIR||'./data';mkdirSync(dataDir,{recursive:true,mode:0o700});
 const store=createStore(join(dataDir,'cpx.sqlite'));const notifier=createNotifier(store,e.DISCORD_BOT_TOKEN);
-const guardian=createGuardianService(store,e);const interactionHandler=createInteractionHandler(store,guardian,e);
+const guardian=createGuardianService(store,e);const owner=createOwnerService(store,e);const interactionHandler=createInteractionHandler(store,guardian,e,fetch,owner);
 if(e.DISCORD_PUBLIC_KEY&&!/^[0-9a-f]{64}$/i.test(e.DISCORD_PUBLIC_KEY))throw new Error('DISCORD_PUBLIC_KEY inválida.');
 const random=()=>randomBytes(32).toString('hex');
 function cookie(req,name){return String(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(name+'='))?.slice(name.length+1)||'';}
@@ -33,10 +34,11 @@ async function actor(req){
 }
 const server=createServer(async(req,res)=>{
  try{
+  if(req.url==='/healthz'&&req.method==='GET')return json(res,{ok:true});
   if(req.url?.split('?')[0]==='/discord/interactions'&&req.method==='POST')return await interactionHandler(req,res);
   if(!equal(req.headers['x-cpx-proxy-secret'],e.CPX_PROXY_SECRET))return json(res,{error:'Acesso não autorizado.'},401);
   const url=new URL(req.url,'https://backend.invalid'),path=url.pathname;
-  if(path==='/config'&&req.method==='GET'){const invite=new URL('https://discord.com/oauth2/authorize');invite.search=new URLSearchParams({client_id:e.DISCORD_CLIENT_ID,scope:'bot applications.commands',permissions:'1099511627776',guild_id:e.DISCORD_GUILD_ID,disable_guild_select:'true'}).toString();return json(res,{live:true,botInstallUrl:invite.href,aiEnabled:e.CPX_AI_ENABLED==='true'&&!!e.OPENAI_API_KEY&&!!e.OPENAI_MODEL});}
+  if(path==='/config'&&req.method==='GET'){const invite=new URL('https://discord.com/oauth2/authorize');invite.search=new URLSearchParams({client_id:e.DISCORD_CLIENT_ID,scope:'bot applications.commands',permissions:OWNER_PERMISSIONS,guild_id:e.DISCORD_GUILD_ID,disable_guild_select:'true'}).toString();return json(res,{live:true,botInstallUrl:invite.href,aiEnabled:e.CPX_AI_ENABLED==='true'&&!!e.OPENAI_API_KEY&&!!e.OPENAI_MODEL});}
   if(path==='/auth/start'&&req.method==='GET'){
    rate('oauth-global',100,60000);const state=random();store.db.prepare('DELETE FROM oauth_states WHERE expires<?').run(Date.now());store.db.prepare('INSERT INTO oauth_states(state_hash,expires) VALUES(?,?)').run(store.hash(state),Date.now()+600000);
    const authorize=new URL('https://discord.com/oauth2/authorize');authorize.search=new URLSearchParams({client_id:e.DISCORD_CLIENT_ID,redirect_uri:callback,response_type:'code',scope:'identify',state,prompt:'consent'}).toString();return redirect(res,authorize.href,[setCookie('cpx_oauth',state,600)]);
@@ -57,6 +59,12 @@ const server=createServer(async(req,res)=>{
   }
   if(path==='/auth/logout'&&req.method==='POST'){const token=cookie(req,'cpx_session');if(token)store.db.prepare('DELETE FROM sessions WHERE token_hash=?').run(store.hash(token));res.setHeader('Set-Cookie',setCookie('cpx_session','',0));return json(res,{ok:true});}
   const who=await actor(req);
+  if(path==='/owner/config'&&req.method==='GET')return json(res,owner.config(who));
+  if(path==='/owner/state'&&req.method==='GET')return json(res,owner.state(who));
+  if(path==='/owner/member'&&req.method==='GET')return json(res,await owner.member(who,url.searchParams.get('id')));
+  if(path==='/owner/prepare'&&req.method==='POST')return json(res,await owner.prepare(who,await body(req)));
+  if(path==='/owner/confirm'&&req.method==='POST')return json(res,await owner.confirm(who,(await body(req)).id));
+  if(path==='/owner/cancel'&&req.method==='POST')return json(res,owner.cancel(who,(await body(req)).id));
   if(path==='/guardian/ask'&&req.method==='POST')return json(res,await guardian.ask(who,await body(req)));
   if(path==='/state'&&req.method==='GET')return json(res,store.snapshot(who));
   if(path==='/action'&&req.method==='POST'){const input=await body(req);return json(res,store.action(who,input));}
