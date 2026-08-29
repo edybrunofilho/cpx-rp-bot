@@ -86,5 +86,5 @@ const server=createServer(async(req,res)=>{
 });
 server.requestTimeout=20000;server.headersTimeout=15000;server.maxRequestsPerSocket=100;
 const stop=notifier.start();const stopGuardian=guardian.start();server.listen(Number(e.PORT||3001),'0.0.0.0',()=>console.log('cpx guardian: serviço iniciado. Segredos não são registrados.'));
-registerStaffCommands().then(()=>console.log('Comandos /staff e /player registrados no servidor de staff.')).catch(()=>console.error('Não foi possível registrar os comandos do servidor de staff.'));
+registerStaffCommands().then(()=>console.log('Comandos /staff e /player registrados no servidor de staff.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor de staff:',error?.message||error));
 for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{stop();stopGuardian();server.close(()=>{store.db.close();process.exit(0);});});

@@ -26,7 +26,7 @@ export const staffCommands=[
     sub('ausencia','Registrar a ausência de um membro da staff',[user,text('inicio','Data inicial, exemplo: 29/08/2026',{min_length:8,max_length:10}),text('fim','Data final, exemplo: 31/08/2026',{min_length:8,max_length:10}),reason,confirm]),
   ]},
   {name:'player',description:'Punições administrativas de jogadores',type:1,default_member_permissions:'8',options:[
-    sub('punicao','Aplicar e registrar uma punição',[user,text('tipo','Tipo de punição',{choices:[{name:'Advertência',value:'warning'},{name:'Mute',value:'timeout'},{name:'Expulsão',value:'kick'},{name:'Banimento',value:'ban'}]}),{type:4,name:'minutos',description:'Duração do mute; obrigatório apenas para mute',required:false,min_value:1,max_value:40320},reason,confirm]),
+    sub('punicao','Aplicar e registrar uma punição',[user,text('tipo','Tipo de punição',{choices:[{name:'Advertência',value:'warning'},{name:'Mute',value:'timeout'},{name:'Expulsão',value:'kick'},{name:'Banimento',value:'ban'}]}),reason,confirm,{type:4,name:'minutos',description:'Duração do mute; obrigatório apenas para mute',required:false,min_value:1,max_value:40320}]),
   ]},
 ];
 
