@@ -8,6 +8,7 @@ import {createNotifier,discord} from './bot.mjs';
 import {createGuardianService} from './guardian-service.mjs';
 import {createInteractionHandler} from './interactions.mjs';
 import {staffCommands,STAFF_GUILD_ID} from './staff-interactions.mjs';
+import {rgCommands} from './rg-interactions.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
 const e=process.env;
 for(const name of ['DISCORD_PUBLIC_KEY','DISCORD_CLIENT_ID','DISCORD_CLIENT_SECRET','DISCORD_BOT_TOKEN','DISCORD_GUILD_ID','DISCORD_ADMIN_ROLE_ID','DISCORD_MAYOR_ROLE_ID','DISCORD_GOVERNMENT_ROLE_ID','CPX_PROXY_SECRET','PUBLIC_ORIGIN'])if(!e[name])throw new Error('Configure '+name+' no ambiente privado do serviço.');
@@ -20,6 +21,9 @@ const store=createStore(join(dataDir,'cpx.sqlite'));const notifier=createNotifie
 const guardian=createGuardianService(store,e);const owner=createOwnerService(store,e);const interactionHandler=createInteractionHandler(store,guardian,e,fetch,owner);
 async function registerStaffCommands(){
  for(const command of staffCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
+}
+async function registerRgCommands(){
+ for(const command of rgCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+e.DISCORD_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
 }
 if(e.DISCORD_PUBLIC_KEY&&!/^[0-9a-f]{64}$/i.test(e.DISCORD_PUBLIC_KEY))throw new Error('DISCORD_PUBLIC_KEY inválida.');
 const random=()=>randomBytes(32).toString('hex');
@@ -87,4 +91,5 @@ const server=createServer(async(req,res)=>{
 server.requestTimeout=20000;server.headersTimeout=15000;server.maxRequestsPerSocket=100;
 const stop=notifier.start();const stopGuardian=guardian.start();server.listen(Number(e.PORT||3001),'0.0.0.0',()=>console.log('cpx guardian: serviço iniciado. Segredos não são registrados.'));
 registerStaffCommands().then(()=>console.log('Comandos /staff e /player registrados no servidor de staff.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor de staff:',error?.message||error));
+registerRgCommands().then(()=>console.log('Comando /criar rg registrado no servidor CPX.')).catch(error=>console.error('Não foi possível registrar o comando /criar rg:',error?.message||error));
 for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{stop();stopGuardian();server.close(()=>{store.db.close();process.exit(0);});});
