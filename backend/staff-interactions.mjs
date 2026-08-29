@@ -3,6 +3,13 @@ import {embedMessage,CPX_GREEN,CPX_RED} from './embeds.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
 
 export const STAFF_GUILD_ID='1494169652342030336';
+const STAFF_REPORT_CHANNELS={
+  rebaixar:'1541910818462113862',
+  promocao:'1541910820269727815',
+  ausencia:'1494419354618560675',
+  advertencia:'1527386164196016230',
+  apelido:'1541910814540308523',
+};
 const ADMINISTRATOR=8n;
 const MANAGE_NICKNAMES=1n<<27n;
 const MANAGE_ROLES=1n<<28n;
@@ -62,23 +69,26 @@ function brazilianDate(value){
 
 export function createStaffService(e,api=discord){
   const request=(path,options)=>api(path,e.DISCORD_BOT_TOKEN,options);
-  async function context(i,targetId,permission,needsReport=false){
+  async function context(i,targetId,permission,reportChannelId){
     if(i.guild_id!==STAFF_GUILD_ID)fail('Este comando está disponível somente no servidor autorizado.',403);
     const actorBits=BigInt(i.member?.permissions||0);
     if(!has(actorBits,permission))fail('Você não possui permissão para utilizar esta função.',403);
     const root='/guilds/'+STAFF_GUILD_ID;
     const [guild,roles,target,botUser,channels]=await Promise.all([
-      request(root),request(root+'/roles'),request(root+'/members/'+targetId),request('/users/@me'),needsReport?request(root+'/channels'):Promise.resolve([]),
+      request(root),request(root+'/roles'),request(root+'/members/'+targetId),request('/users/@me'),request(root+'/channels'),
     ]);
     const bot=await request(root+'/members/'+botUser.id);
     let channel=null;
-    if(needsReport){
+    if(reportChannelId){
+      channel=channels.find(c=>[0,5].includes(c.type)&&c.id===reportChannelId);
+      if(!channel)fail('O canal configurado para este relatório não existe ou não é um canal de texto.',503);
+    }else{
       const configured=String(e.STAFF_PUNISHMENTS_CHANNEL_ID||'');
       const candidates=channels.filter(c=>[0,5].includes(c.type)&&(configured?c.id===configured:normalize(c.name).endsWith('punicoes')));
       if(candidates.length!==1)fail(configured?'O canal configurado para punições é inválido.':'Crie apenas um canal de texto chamado “punições” ou configure STAFF_PUNISHMENTS_CHANNEL_ID.',503);
       channel=candidates[0];
-      if((effective(bot,roles,guild,channel)&(1024n|2048n|16384n))!==(1024n|2048n|16384n))fail('O bot precisa ver o canal de punições, enviar mensagens e inserir links.',403);
     }
+    if((effective(bot,roles,guild,channel)&(1024n|2048n|16384n))!==(1024n|2048n|16384n))fail('O bot precisa ver o canal do relatório, enviar mensagens e inserir links.',403);
     if(target.user.id===guild.owner_id||target.user.bot)fail('Este membro está protegido contra esta ação.',403);
     if(i.member.user.id!==guild.owner_id&&highest(i.member,roles)<=highest(target,roles))fail('A hierarquia de cargos impede esta ação.',403);
     if(highest(bot,roles)<=highest(target,roles))fail('Coloque o cargo do bot acima do cargo do membro.',403);
@@ -98,8 +108,7 @@ export function createStaffService(e,api=discord){
     const punishmentPermission={warning:MODERATE_MEMBERS,timeout:MODERATE_MEMBERS,kick:KICK_MEMBERS,ban:BAN_MEMBERS}[o.tipo];
     const required={promocao:MANAGE_ROLES,rebaixar:MANAGE_ROLES,advertencia:MODERATE_MEMBERS,apelido:MANAGE_NICKNAMES,ausencia:MODERATE_MEMBERS,punicao:punishmentPermission}[action];
     if(!required)fail('Opção administrativa inválida.');
-    const reportable=action==='advertencia'||action==='punicao';
-    const ctx=await context(i,targetId,required,reportable);
+    const ctx=await context(i,targetId,required,STAFF_REPORT_CHANNELS[action]||null);
     const base='/guilds/'+STAFF_GUILD_ID;
     let title,summary,extra=[];
     if(action==='promocao'||action==='rebaixar'){
@@ -134,9 +143,8 @@ export function createStaffService(e,api=discord){
       summary=type==='warning'?'Advertência registrada.':'Punição aplicada com sucesso.';
     }
     const fields=[{name:'Membro',value:mention(targetId)+'\n'+display(ctx.target),inline:true},{name:'Responsável',value:mention(actorId),inline:true},...extra,{name:'Motivo',value:o.motivo}];
-    if(!reportable)return embedMessage(title,summary,{color:CPX_GREEN,fields});
     const sent=await report(ctx.channel,title,fields,CPX_RED);
-    return embedMessage(title,summary+(sent?' O relatório disciplinar foi enviado automaticamente em '+channelMention(ctx.channel.id)+'.':' A ação foi concluída, mas o relatório não pôde ser enviado; não repita a ação antes de conferir o canal.'),{color:sent?CPX_GREEN:CPX_RED,fields});
+    return embedMessage(title,summary+(sent?' O relatório foi enviado publicamente em '+channelMention(ctx.channel.id)+'.':' A ação foi concluída, mas o relatório não pôde ser enviado; não repita a ação antes de conferir o canal.'),{color:sent?CPX_GREEN:CPX_RED,fields});
   }
   return {execute};
 }
