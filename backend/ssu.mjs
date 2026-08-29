@@ -2,6 +2,8 @@ import {fail} from '../lib/cpx/engine.mjs';
 import {embedMessage} from './embeds.mjs';
 
 export const SSU_CHANNEL_ID='1536778465444106331';
+export const ERLC_PLAYERS_CHANNEL_ID='1529315510506750082';
+const ERLC_API_URL='https://api.erlc.gg/v2/server';
 export const SEND_POLLS=1n<<49n;
 export const SSU_MODELS={
   vote:{
@@ -18,13 +20,35 @@ export const SSU_MODELS={
     label:'Server Start',
     players:'0',
     temperature:'18',
-    message:'<:SSU:1490347146858332291> **------- NO CPX!** 🚔\n\n<:Fundador:1500284415358533704> **O servidor está oficialmente aberto! Bora fazer um RP de qualidade?**\n\n➡️ **Quantidade de jogadores online:** {players}\n➡️ **Temperatura:** {temperature} °C – ❄️ Frio\n➡️ **Para uma melhor imersão, utilize roupas de acordo com a temperatura anunciada na SSU.**\n➡️ **Código do servidor:** `CPXERLCRP`\n\n> 📌 **Para entrar em nosso servidor, é obrigatório fazer parte do grupo oficial do Complexo Paulista (CPX). O link do grupo está disponível em nossos canais oficiais.**\n\n🚨 **Bom RP a todos! Respeitem as regras, valorizem a imersão e aproveitem a experiência.**',
+    message:'<:SSU:1490347146858332291> **------- NO CPX!** 🚔\n\n<:Fundador:1500284415358533704> **O servidor está oficialmente aberto! Bora fazer um RP de qualidade?**\n\n🎮 **Quantidade de jogadores ON!**\nA quantidade atual de jogadores no servidor privado do CPX está abaixo!\n\n➡️ **Jogadores online:** {players}\n➡️ **Temperatura:** {temperature} °C – ❄️ Frio\n➡️ **Para uma melhor imersão, utilize roupas de acordo com a temperatura anunciada na SSU.**\n➡️ **Código do servidor:** `CPXERLCRP`\n\n> 📌 **Para entrar em nosso servidor, é obrigatório fazer parte do grupo oficial do Complexo Paulista (CPX). O link do grupo está disponível em nossos canais oficiais.**\n\n🚨 **Bom RP a todos! Respeitem as regras, valorizem a imersão e aproveitem a experiência.**',
   },
 };
 // Compatibilidade com rascunhos criados antes da inclusão dos três modelos.
 export const SSU_DEFAULTS={model:'vote',...SSU_MODELS.vote};
 
 const cleanMessage=value=>String(value??'').replaceAll('@everyone','').replaceAll('@here','@\u200bhere').trim();
+export async function fetchErlcServerInfo(e,request=fetch){
+  const key=String(e.ERLC_SERVER_KEY||'').trim();
+  if(!key)fail('Configure ERLC_SERVER_KEY nas variáveis privadas do Railway.',503);
+  let response;
+  try{response=await request(ERLC_API_URL,{headers:{'server-key':key,Accept:'application/json'},signal:AbortSignal.timeout(8000)});}catch{fail('A API do ER:LC não respondeu. Tente novamente em instantes.',503);}
+  if(!response.ok){
+    if([401,403].includes(response.status))fail('A chave privada da API do ER:LC é inválida ou não possui acesso.',503);
+    if(response.status===429)fail('A API do ER:LC atingiu o limite de consultas. Aguarde um pouco.',429);
+    fail('Não foi possível consultar o servidor privado no ER:LC.',503);
+  }
+  let data;try{data=await response.json();}catch{fail('A API do ER:LC retornou dados inválidos.',503);}
+  const currentPlayers=Number(data.CurrentPlayers),maxPlayers=Number(data.MaxPlayers);
+  if(!Number.isInteger(currentPlayers)||currentPlayers<0||!Number.isInteger(maxPlayers)||maxPlayers<currentPlayers)fail('A API do ER:LC não informou uma contagem válida.',503);
+  return {currentPlayers,maxPlayers,name:String(data.Name||'Servidor privado CPX'),joinKey:String(data.JoinKey||'')};
+}
+export function erlcPlayersMessage(server){
+  return embedMessage('Quantidade de jogadores ON!','A quantidade atual de jogadores no servidor privado do CPX está abaixo!',{fields:[
+    {name:'Jogadores online',value:String(server.currentPlayers),inline:true},
+    {name:'Capacidade',value:String(server.maxPlayers),inline:true},
+    {name:'Servidor',value:String(server.name||'Servidor privado CPX')},
+  ],timestamp:new Date().toISOString()});
+}
 function validateMessage(message){
   if(message.length<10||message.length>3500)fail('A mensagem deve ter entre 10 e 3500 caracteres.');
 }
@@ -70,4 +94,3 @@ export function ssuMessage(input){
   }
   return {...embedMessage(title,description),content,allowed_mentions:{parse:['everyone']},...(poll?{poll}:{})};
 }
-

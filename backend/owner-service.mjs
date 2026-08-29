@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {discord} from './bot.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
 import {announcementMessage} from './embeds.mjs';
-import {SSU_CHANNEL_ID,SEND_POLLS,validateSsu,ssuMessage} from './ssu.mjs';
+import {ERLC_PLAYERS_CHANNEL_ID,SSU_CHANNEL_ID,SEND_POLLS,erlcPlayersMessage,fetchErlcServerInfo,validateSsu,ssuMessage} from './ssu.mjs';
 
 export const OWNER_ID = '1300178869319635004';
 export const APP_ID = '1542567571255984168';
@@ -46,7 +46,7 @@ export function createOwnerService(store,e,api=discord,{recover=true}={}){
   }
   async function hierarchy(actor,target,kind,model=null){
     requireOwner(actor);
-    if(kind==='announcement'||kind==='ssu')return announcementChannel(actor,target,kind,model);
+    if(['announcement','ssu','erlc-players'].includes(kind))return announcementChannel(actor,target,kind,model);
     const root='/guilds/'+e.DISCORD_GUILD_ID;
     const [guild,roles,a,t,b]=await Promise.all([request(root),request(root+'/roles'),request(root+'/members/'+actor.id),request(root+'/members/'+target),request('/users/@me')]);
     const bot=await request(root+'/members/'+b.id);
@@ -55,7 +55,8 @@ export function createOwnerService(store,e,api=discord,{recover=true}={}){
   }
   async function announcementChannel(actor,id,kind='announcement',model=null){
     requireOwner(actor);
-    if(id!==(kind==='ssu'?SSU_CHANNEL_ID:ANNOUNCEMENT_CHANNEL_ID))fail('Canal de publicação não autorizado.',403);
+    const authorized={ssu:SSU_CHANNEL_ID,announcement:ANNOUNCEMENT_CHANNEL_ID,'erlc-players':ERLC_PLAYERS_CHANNEL_ID}[kind];
+    if(!authorized||id!==authorized)fail('Canal de publicação não autorizado.',403);
     const root='/guilds/'+e.DISCORD_GUILD_ID;
     const [channel,guild,roles,ownerMember,botUser]=await Promise.all([request('/channels/'+id),request(root),request(root+'/roles'),request(root+'/members/'+actor.id),request('/users/@me')]);
     if(channel.id!==id||channel.guild_id!==e.DISCORD_GUILD_ID||![0,5].includes(channel.type))fail('Canal de publicação inválido ou pertencente a outro servidor.',403);
@@ -80,6 +81,15 @@ export function createOwnerService(store,e,api=discord,{recover=true}={}){
     if(kind==='ssu'&&model==='vote'&&(effective(botMember)&SEND_POLLS)===0n)fail('O bot precisa da permissão Enviar enquetes no canal da SSU.',403);
     return channel;
   }
+  async function publishErlcPlayers(actor){
+    requireOwner(actor);
+    const [server]=await Promise.all([fetchErlcServerInfo(e),hierarchy(actor,ERLC_PLAYERS_CHANNEL_ID,'erlc-players')]);
+    const nonce=randomUUID().replaceAll('-','').slice(0,25);
+    const message=await request('/channels/'+ERLC_PLAYERS_CHANNEL_ID+'/messages',{method:'POST',body:JSON.stringify({...erlcPlayersMessage(server),nonce,enforce_nonce:true})});
+    if(!/^\d{17,22}$/.test(message?.id||''))throw Error('Resposta de publicação incompleta.');
+    audit(actor,'erlc-players:applied',ERLC_PLAYERS_CHANNEL_ID,'Contagem pública: '+server.currentPlayers+'/'+server.maxPlayers+'.');
+    return {...server,channelId:ERLC_PLAYERS_CHANNEL_ID,messageId:message.id};
+  }
   function ssuDraft(actor,id){
     requireOwner(actor);
     const row=db.prepare('SELECT o.*,d.payload FROM owner_operations o JOIN owner_ssu_drafts d ON d.operation_id=o.id WHERE o.id=? AND o.actor=? AND o.kind=?').get(id,actor.id,'ssu');
@@ -89,6 +99,7 @@ export function createOwnerService(store,e,api=discord,{recover=true}={}){
   }
   async function prepare(actor,input){
     requireOwner(actor);
+    if(input.kind==='ssu'&&input.model==='start')input={...input,players:String((await fetchErlcServerInfo(e)).currentPlayers)};
     const {kind}=input,ssu=kind==='ssu'?validateSsu(input):null,target=kind==='ssu'?SSU_CHANNEL_ID:kind==='announcement'?ANNOUNCEMENT_CHANNEL_ID:input.target,reason=ssu?ssuMessage(ssu).embeds[0].description:typeof input.reason==='string'?input.reason.trim():'';
     if(!['warn','timeout','kick','ban','announcement','ssu'].includes(kind)||!/^\d{17,22}$/.test(target||''))fail('Escolha uma ação e um ID válidos.');
     if(reason.length<3||reason.length>(kind==='ssu'?4000:kind==='announcement'?1800:180))fail('Texto fora do limite permitido para esta ação.');
@@ -118,7 +129,8 @@ export function createOwnerService(store,e,api=discord,{recover=true}={}){
     });
     try{
       const ssuDraftRow=row.kind==='ssu'?db.prepare('SELECT payload FROM owner_ssu_drafts WHERE operation_id=?').get(row.id):null;
-      const ssuPayload=ssuDraftRow?validateSsu(JSON.parse(ssuDraftRow.payload)):null;
+      let ssuPayload=ssuDraftRow?validateSsu(JSON.parse(ssuDraftRow.payload)):null;
+      if(ssuPayload?.model==='start')ssuPayload={...ssuPayload,players:String((await fetchErlcServerInfo(e)).currentPlayers)};
       await hierarchy(actor,row.target,row.kind,ssuPayload?.model);
       const base='/guilds/'+e.DISCORD_GUILD_ID;
       const headers={'X-Audit-Log-Reason':encodeURIComponent(('cpx guardian | '+actor.id+' | '+row.reason).slice(0,300))};
@@ -146,6 +158,6 @@ export function createOwnerService(store,e,api=discord,{recover=true}={}){
   }
   function cancel(actor,id){requireOwner(actor);const r=db.prepare("UPDATE owner_operations SET status='cancelled' WHERE id=? AND actor=? AND status='pending'").run(id,actor.id);if(!r.changes)fail('Confirmação já encerrada.',409);return {message:'Ação cancelada.'};}
   function state(actor){requireOwner(actor);return {ownerId:OWNER_ID,logs:db.prepare('SELECT * FROM owner_logs ORDER BY at DESC,rowid DESC LIMIT 100').all(),warnings:db.prepare('SELECT * FROM owner_warnings ORDER BY at DESC LIMIT 100').all(),operations:db.prepare('SELECT * FROM owner_operations ORDER BY created DESC LIMIT 50').all(),area:db.prepare('SELECT * FROM owner_area WHERE id=1').get()||null};}
-  function config(actor){requireOwner(actor);return {ownerId:OWNER_ID,guildId:e.DISCORD_GUILD_ID,applicationId:e.DISCORD_CLIENT_ID,announcementChannelId:ANNOUNCEMENT_CHANNEL_ID,portal:e.PUBLIC_ORIGIN,aiEnabled:e.CPX_AI_ENABLED==='true',roles:{admin:e.DISCORD_ADMIN_ROLE_ID,mayor:e.DISCORD_MAYOR_ROLE_ID,government:e.DISCORD_GOVERNMENT_ROLE_ID}};}
-  return {member,prepare,confirm,cancel,state,config,ssuDraft};
+  function config(actor){requireOwner(actor);return {ownerId:OWNER_ID,guildId:e.DISCORD_GUILD_ID,applicationId:e.DISCORD_CLIENT_ID,announcementChannelId:ANNOUNCEMENT_CHANNEL_ID,portal:e.PUBLIC_ORIGIN,aiEnabled:e.CPX_AI_ENABLED==='true',erlcConfigured:!!e.ERLC_SERVER_KEY,roles:{admin:e.DISCORD_ADMIN_ROLE_ID,mayor:e.DISCORD_MAYOR_ROLE_ID,government:e.DISCORD_GOVERNMENT_ROLE_ID}};}
+  return {member,prepare,confirm,cancel,state,config,ssuDraft,publishErlcPlayers};
 }
