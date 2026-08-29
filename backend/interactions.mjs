@@ -4,6 +4,7 @@ import {createPublicKey,verify,createHash} from 'node:crypto';
 import {money,fail} from '../lib/cpx/engine.mjs';
 import {guardianCommands} from '../lib/cpx/guardian.mjs';
 import {formatReply,commandTitle} from './embeds.mjs';
+import {createStaffService,isStaffCommand,STAFF_GUILD_ID} from './staff-interactions.mjs';
 export function validSignature(raw,signature,timestamp,publicKey,now=Date.now()){
  try{if(!/^[0-9a-f]{128}$/i.test(signature||'')||!/^\d{10,13}$/.test(timestamp||'')||!/^[0-9a-f]{64}$/i.test(publicKey||'')||Math.abs(now-Number(timestamp)*1000)>300000)return false;const key=createPublicKey({key:Buffer.concat([Buffer.from('302a300506032b6570032100','hex'),Buffer.from(publicKey,'hex')]),format:'der',type:'spki'});return verify(null,Buffer.concat([Buffer.from(timestamp),raw]),key,Buffer.from(signature,'hex'));}catch{return false;}
 }
@@ -38,22 +39,24 @@ export async function executeCommand(i,store,service,e){
 }
 export function createInteractionHandler(store,service,e,replyFetch=fetch,owner=null){
  const windows=new Map();
+ const staff=createStaffService(e);
  return async function(req,res){
   const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>65536){res.writeHead(413);res.end();return;}chunks.push(c);}const raw=Buffer.concat(chunks);
   if(!validSignature(raw,req.headers['x-signature-ed25519'],req.headers['x-signature-timestamp'],e.DISCORD_PUBLIC_KEY)){res.writeHead(401);res.end('Invalid signature');return;}
   let i;try{i=JSON.parse(raw.toString());}catch{res.writeHead(400);res.end();return;}
   const respond=data=>{if(data.type===4)data={...data,data:formatReply(data.data,'Aviso do cpx guardian',true)};res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
   if(i.type===1){respond({type:1});return;}
-  if(![2,3,5].includes(i.type)||i.application_id!==e.DISCORD_CLIENT_ID||i.guild_id!==e.DISCORD_GUILD_ID){respond({type:4,data:{content:'Comando indisponível neste contexto.',flags:64,allowed_mentions:{parse:[]}}});return;}
+  const staffRequest=isStaffCommand(i)&&i.guild_id===STAFF_GUILD_ID;
+  if(![2,3,5].includes(i.type)||i.application_id!==e.DISCORD_CLIENT_ID||(i.guild_id!==e.DISCORD_GUILD_ID&&!staffRequest)){respond({type:4,data:{content:'Comando indisponível neste contexto.',flags:64,allowed_mentions:{parse:[]}}});return;}
   const id=i.member?.user?.id;if(!id){respond({type:4,data:{content:'Membro inválido.',flags:64}});return;}
-  if(isOwnerInteraction(i)){try{requireOwner({id});if(!owner)fail('Painel indisponível.',503);const immediate=ownerImmediate(i,owner);if(immediate){respond(immediate);return;}}catch(error){respond({type:4,data:{content:error.status?error.message:'Área indisponível.',flags:64,allowed_mentions:{parse:[]}}});return;}}
+  if(isOwnerInteraction(i)){try{if(i.guild_id!==e.DISCORD_GUILD_ID)fail('Painel indisponível neste servidor.',403);requireOwner({id});if(!owner)fail('Painel indisponível.',503);const immediate=ownerImmediate(i,owner);if(immediate){respond(immediate);return;}}catch(error){respond({type:4,data:{content:error.status?error.message:'Área indisponível.',flags:64,allowed_mentions:{parse:[]}}});return;}}
   const now=Date.now(),w=windows.get(id)||{until:now+60000,count:0};if(w.until<now){w.count=0;w.until=now+60000;}w.count++;windows.set(id,w);for(const[k,v]of windows)if(v.until<now)windows.delete(k);
   if(w.count>20){respond({type:4,data:{content:'Aguarde um minuto antes de continuar.',flags:64}});return;}
   const inserted=store.db.prepare('INSERT OR IGNORE INTO interactions(id,status,at) VALUES(?,?,?)').run(i.id,'processing',Date.now());
-  if(!inserted.changes){respond({type:4,data:{content:'Esta solicitação já foi recebida. Consulte o portal antes de repetir uma operação.',flags:64}});return;}
+  if(!inserted.changes){respond({type:4,data:{content:'Esta solicitação já foi recebida. Confira o resultado antes de repetir a operação.',flags:64}});return;}
   // Acknowledge before any Discord lookup or AI call (3-second deadline).
   respond({type:5,data:{flags:64}});
-  let content,status='done';try{content=isOwnerInteraction(i)?await executeOwnerInteraction(i,owner,e):await executeCommand(i,store,service,e);}catch(error){status='failed';content=error.status?error.message:'Não foi possível concluir. Consulte o portal antes de repetir.';}
+  let content,status='done';try{content=staffRequest?await staff.execute(i):isOwnerInteraction(i)?await executeOwnerInteraction(i,owner,e):await executeCommand(i,store,service,e);}catch(error){status='failed';content=error.status?error.message:'Não foi possível concluir. Confira o Discord antes de repetir.';}
   store.db.prepare('UPDATE interactions SET status=? WHERE id=?').run(status,i.id);
   try{await replyFetch('https://discord.com/api/v10/webhooks/'+e.DISCORD_CLIENT_ID+'/'+encodeURIComponent(i.token)+'/messages/@original',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(formatReply(content,status==='failed'?'Não foi possível concluir':commandTitle(i),status==='failed')),signal:AbortSignal.timeout(10000)});}catch{/* Do not log interaction tokens; results remain visible in the portal. */}
  };

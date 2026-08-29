@@ -1,7 +1,7 @@
 import {requireOwner} from './owner-service.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
 import {embedMessage,announcementMessage,CPX_GREEN,CPX_RED} from './embeds.mjs';
-import {SSU_CHANNEL_ID,SSU_DEFAULTS,ssuMessage} from './ssu.mjs';
+import {SSU_CHANNEL_ID,SSU_DEFAULTS,SSU_MODELS,ssuMessage} from './ssu.mjs';
 
 const actionNames={warn:'Advertência',timeout:'Restrição temporária',kick:'Expulsão',ban:'Banimento',announcement:'Anúncio',ssu:'Votação SSU'};
 const statusNames={requested:'Solicitação registrada',applied:'Concluída',failed:'Recusada',uncertain:'Resultado não confirmado'};
@@ -20,23 +20,43 @@ const button=(label,id,style=2)=>({type:2,label,custom_id:id,style});
 const field=(id,label,max=180)=>row([{type:4,custom_id:id,label,style:1,required:true,max_length:max}]);
 const values=i=>Object.fromEntries((i.data.components||[]).flatMap(r=>r.components||[]).map(c=>[c.custom_id,c.value]));
 export const isOwnerInteraction=i=>['cpxpainel','guardian','warn','userinfo'].includes(i.data?.name)||String(i.data?.custom_id||'').startsWith('own:');
-function ssuModal(draft=SSU_DEFAULTS,replaceId=''){
+function ssuModal(model='vote',draft=null,replaceId=''){
+  draft={model,...SSU_MODELS[model],...(draft||{})};
   const input=(id,label,value,max,style=1)=>row([{type:4,custom_id:id,label,value:String(value),style,required:true,max_length:max}]);
-  return {type:9,data:{custom_id:'own:ssu-submit'+(replaceId?':'+replaceId:''),title:'Editar votação SSU',components:[
+  const components=model==='vote'?[
     ...draft.times.map((time,index)=>input('time'+(index+1),'Horário '+(index+1)+' (HH:MM)',time,5)),
-    input('message','Mensagem: use {h1}, {h2} e {h3}',draft.message,1500,2),
+    input('message','Mensagem: use {h1}, {h2} e {h3}',draft.message,3500,2),
     input('duration','Duração da votação (1 a 768 horas)',draft.duration,3),
-  ]}};
+  ]:model==='start'?[
+    input('players','Quantidade de jogadores online',draft.players,4),
+    input('temperature','Temperatura em °C',draft.temperature,5),
+    input('message','Use {players} e {temperature}',draft.message,3500,2),
+  ]:[input('message','Mensagem do Server Off',draft.message,3500,2)];
+  return {type:9,data:{custom_id:'own:ssu-submit:'+model+(replaceId?':'+replaceId:''),title:'Editar '+SSU_MODELS[model].label,components}};
+}
+function ssuChooser(){
+  const message=embedMessage('Área de SSU','Escolha um dos três modelos. Antes da publicação, você poderá editar o conteúdo e revisar a prévia.',{components:[row([{type:3,custom_id:'own:ssu-model',placeholder:'Escolha o modelo da SSU',min_values:1,max_values:1,options:[
+    {label:'1 — Votação de horários',value:'vote',description:'Edite três horários e publique uma enquete.'},
+    {label:'2 — Server Off',value:'offline',description:'Avise que a cidade foi fechada.'},
+    {label:'3 — Server Start',value:'start',description:'Informe jogadores, temperatura e abertura.'},
+  ]}])]});
+  return {type:4,data:{...message,flags:64}};
 }
 export function ownerImmediate(i,owner=null){
   if(i.type!==3)return null;
   requireOwner({id:i.member?.user?.id});
   const id=i.data.custom_id;
-  if(id==='own:ssu')return ssuModal();
+  if(id==='own:ssu')return ssuChooser();
+  if(id==='own:ssu-model'){
+    const model=i.data.values?.[0];
+    if(!Object.hasOwn(SSU_MODELS,model))fail('Modelo de SSU inválido.');
+    return ssuModal(model);
+  }
   if(id.startsWith('own:ssu-edit:')){
     if(!owner)fail('Painel indisponível.',503);
     const draftId=id.slice('own:ssu-edit:'.length);
-    return ssuModal(owner.ssuDraft({id:i.member.user.id},draftId),draftId);
+    const draft=owner.ssuDraft({id:i.member.user.id},draftId);
+    return ssuModal(draft.model||SSU_DEFAULTS.model,draft,draftId);
   }
   if(id==='own:announcement')return {type:9,data:{custom_id:'own:announcement-submit',title:'Revisar anúncio',components:[row([{type:4,custom_id:'text',label:'Texto do anúncio',style:2,required:true,min_length:3,max_length:1800}])]}};
   if(id==='own:lookup')return {type:9,data:{custom_id:'own:lookup-submit',title:'Consultar membro',components:[field('target','ID numérico do membro',22)]}};
@@ -47,7 +67,7 @@ export function ownerImmediate(i,owner=null){
   return {type:9,data:{custom_id:'own:prepare:'+match[1]+':'+match[2],title:'Revisar: '+actionNames[match[1]],components}};
 }
 export function ownerMenu(origin){
-  return embedMessage('Painel de controle','Acesso exclusivo à conta **joaodayz.**\nSelecione uma opção abaixo. Anúncios, votações e ações de moderação exigem revisão e confirmação.',{fields:[info('Membros e moderação','Consulte membros e aplique advertências, restrições temporárias, expulsões ou banimentos.'),info('Anúncios','Revise o comunicado antes de publicá-lo no canal oficial com a menção @everyone.'),info('Votação SSU','Edite a mensagem e os três horários antes de abrir uma enquete com uma escolha por pessoa.')],components:[row([button('Membros e moderação','own:lookup'),button('Postar anúncio','own:announcement'),button('Registros','own:logs')]),row([button('Enviar votação SSU','own:ssu',1),button('Configurações','own:config'),{type:2,style:5,label:'Painel web',url:origin+'/owner'}])]});
+  return embedMessage('Painel de controle','Acesso exclusivo à conta **joaodayz.**\nSelecione uma opção abaixo. Anúncios, mensagens de SSU e ações de moderação exigem revisão e confirmação.',{fields:[info('Membros e moderação','Consulte membros e aplique advertências, restrições temporárias, expulsões ou banimentos.'),info('Anúncios','Revise o comunicado antes de publicá-lo no canal oficial com a menção @everyone.'),info('Área de SSU','Escolha entre votação de horários, Server Off e Server Start. Todos os modelos são editáveis e enviados em embeds.')],components:[row([button('Membros e moderação','own:lookup'),button('Postar anúncio','own:announcement'),button('Registros','own:logs')]),row([button('Área de SSU','own:ssu',1),button('Configurações','own:config'),{type:2,style:5,label:'Painel web',url:origin+'/owner'}])]});
 }
 export async function executeOwnerInteraction(i,owner,e){
   const actor={id:i.member?.user?.id};requireOwner(actor);
@@ -55,9 +75,15 @@ export async function executeOwnerInteraction(i,owner,e){
   const opts=Object.fromEntries((i.data.options||[]).map(o=>[o.name,o.value]));
   const id=i.data.custom_id||'',form=values(i);
   if(['guardian','cpxpainel'].includes(i.data.name))return ownerMenu(e.PUBLIC_ORIGIN);
-  if(id==='own:ssu-submit'||id.startsWith('own:ssu-submit:')){
-    const p=await owner.prepare(actor,{kind:'ssu',times:[form.time1,form.time2,form.time3],message:form.message,duration:form.duration,...(id.startsWith('own:ssu-submit:')?{replaceId:id.slice('own:ssu-submit:'.length)}:{})});
-    const preview=embedMessage('Revisão da votação SSU','Confira a mensagem e os horários. Nada foi publicado. Esta confirmação expira em 5 minutos.',{fields:[info('Canal',`#${p.name} (${SSU_CHANNEL_ID})`),info('Horários',p.ssu.times.join(' • ')),info('Duração',`${p.ssu.duration} ${p.ssu.duration===1?'hora':'horas'}. Uma escolha por pessoa.`),info('Convocação','A publicação mencionará @everyone. Esta prévia não notifica ninguém.')],components:[row([button('Publicar votação','own:confirm:'+p.id,4),button('Editar mensagem e horários','own:ssu-edit:'+p.id),button('Cancelar','own:cancel:'+p.id)])]});
+  const ssuSubmit=/^own:ssu-submit:(vote|offline|start)(?::([a-f0-9-]{36}))?$/.exec(id);
+  if(ssuSubmit){
+    const model=ssuSubmit[1];
+    const input={kind:'ssu',model,message:form.message,...(ssuSubmit[2]?{replaceId:ssuSubmit[2]}:{})};
+    if(model==='vote')Object.assign(input,{times:[form.time1,form.time2,form.time3],duration:form.duration});
+    if(model==='start')Object.assign(input,{players:form.players,temperature:form.temperature});
+    const p=await owner.prepare(actor,input);
+    const details=p.ssu.model==='vote'?[info('Horários',p.ssu.times.join(' • ')),info('Duração',`${p.ssu.duration} ${p.ssu.duration===1?'hora':'horas'}. Uma escolha por pessoa.`)]:p.ssu.model==='start'?[info('Jogadores online',p.ssu.players,true),info('Temperatura',p.ssu.temperature+' °C',true)]:[];
+    const preview=embedMessage('Revisão da SSU','Confira o modelo e a mensagem. Nada foi publicado. Esta confirmação expira em 5 minutos.',{fields:[info('Modelo',SSU_MODELS[p.ssu.model].label),info('Canal',`#${p.name} (${SSU_CHANNEL_ID})`),...details,info('Menção','A publicação mencionará @everyone. Esta prévia não notifica ninguém.')],components:[row([button('Publicar','own:confirm:'+p.id,4),button('Editar','own:ssu-edit:'+p.id),button('Cancelar','own:cancel:'+p.id)])]});
     preview.embeds.push(...ssuMessage(p.ssu).embeds);
     return preview;
   }
