@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {embedMessage,CPX_GREEN} from './embeds.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
+import {cnhSubcommand} from './cnh-interactions.mjs';
 
 const API='https://discord.com/api/v10';
 const text=(name,description,max=60)=>({type:3,name,description,required:true,min_length:2,max_length:max});
@@ -18,7 +19,7 @@ export const rgCommands=[{
       text('profissao','Profissão fictícia do personagem'),
       {type:5,name:'confirmar',description:'Confirmo que todos os dados são fictícios e exclusivos para RP',required:true},
     ],
-  }],
+  },cnhSubcommand],
 }];
 export const isRgCommand=i=>i.data?.name==='criar'&&i.data?.options?.[0]?.name==='rg';
 

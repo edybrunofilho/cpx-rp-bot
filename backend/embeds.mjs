@@ -44,3 +44,4 @@ export function commandTitle(i) {
   if (group?.type === 2 && group.name === 'ticket') return 'Atendimento privado';
   return ({ajuda:'Central de ajuda',portal:'Portal da cidade',status:'Status do serviço',saldo:'Saldo da conta RP',rg:'Registro do personagem',extrato:'Extrato da conta RP',perguntar:'Atendimento',avisos:'Notificações financeiras',transferir:'Transferência RP',ajustar:'Ajuste de saldo RP',pagar:'Pagamento institucional',advertir:'Advertência',castigo:'Restrição temporária',comunicado:'Comunicado do Instaplexo'})[group?.name] ?? 'cpx guardian';
 }
+

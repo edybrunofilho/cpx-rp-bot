@@ -29,3 +29,4 @@ export function createNotifier(store,token,send=discord){
  }
  return {tick,start(){const timer=setInterval(()=>tick().catch(()=>{}),1500);return()=>clearInterval(timer);}};
 }
+

@@ -16,3 +16,4 @@ export const commandDefinition={name:'cpx',description:'cpx guardian — portal,
  sub('comunicado','Publique um comunicado no Instaplexo',[str('canal','Canal oficial',true,{choices:[{name:'Prefeitura',value:'prefeitura'},{name:'Administração',value:'administracao'},{name:'Banco',value:'banco'},{name:'Governo',value:'governo'}]}),str('texto','Conteúdo do comunicado',true,{min_length:3,max_length:1000}),confirm]),
  {type:2,name:'ticket',description:'Atendimento privado integrado ao portal',options:[sub('abrir','Abra um atendimento',[str('assunto','Assunto',true,{min_length:3,max_length:80}),str('mensagem','Descreva o que precisa',true,{min_length:3})]),sub('listar','Veja os seus tickets'),sub('responder','Responda a um atendimento',[str('id','ID completo do ticket',true,{max_length:36}),str('mensagem','Sua resposta')]),sub('fechar','Encerre um atendimento',[str('id','ID completo do ticket',true,{max_length:36}),confirm])]}
 ]};
+
