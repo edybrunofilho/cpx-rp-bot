@@ -1,9 +1,8 @@
 import {createHash} from 'node:crypto';
-import sharp from 'sharp';
 import {embedMessage,CPX_GREEN} from './embeds.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
 import {cnhSubcommand} from './cnh-interactions.mjs';
-import {documentFontStyle} from './document-font.mjs';
+import {documentFontStyle,loadDocumentRenderer} from './document-font.mjs';
 
 const API='https://discord.com/api/v10';
 const text=(name,description,max=60)=>({type:3,name,description,required:true,min_length:2,max_length:max});
@@ -32,6 +31,7 @@ const documentId=(userId,interactionId)=>'CPX-RP-'+createHash('sha256').update(u
 const base=(side)=>`<rect width="1400" height="880" rx="38" fill="#eef1df"/><rect x="18" y="18" width="1364" height="844" rx="28" fill="none" stroke="#123f2c" stroke-width="18"/><rect x="42" y="42" width="1316" height="796" rx="20" fill="none" stroke="#b49a3a" stroke-width="3"/><path d="M70 120H1330M70 760H1330" stroke="#123f2c" stroke-width="3"/><text x="700" y="104" text-anchor="middle" font-size="44" font-weight="800" fill="#123f2c">COMPLEXO PAULISTA ROLEPLAY</text><text x="700" y="150" text-anchor="middle" font-size="26" font-weight="700" fill="#496250">CARTEIRA DE CIDADÃO • ${side}</text><text x="700" y="490" text-anchor="middle" font-size="160" font-weight="900" fill="#123f2c" opacity="0.055" transform="rotate(-18 700 490)">FICTÍCIO</text><rect y="780" width="1400" height="100" fill="#123f2c"/><text x="700" y="840" text-anchor="middle" font-size="31" font-weight="800" fill="#fff5c7">SEM VALIDADE OFICIAL • USO EXCLUSIVO PARA ROLEPLAY</text>`;
 const label=(x,y,name,value,width=760)=>`<text x="${x}" y="${y}" font-size="20" font-weight="800" fill="#123f2c">${escape(name)}</text><rect x="${x}" y="${y+10}" width="${width}" height="56" rx="12" fill="#ffffff" fill-opacity=".58" stroke="#728474"/><text x="${x+18}" y="${y+48}" font-size="27" font-weight="600" fill="#183b2d">${escape(value)}</text>`;
 export async function renderRgCards(data,photo){
+  const sharp=await loadDocumentRenderer();
   const mime=data.photoType==='image/png'?'image/png':data.photoType==='image/webp'?'image/webp':'image/jpeg';
   const normalized=await sharp(photo).rotate().resize(330,440,{fit:'cover',position:'attention'}).jpeg({quality:88}).toBuffer();
   const image='data:image/jpeg;base64,'+normalized.toString('base64');

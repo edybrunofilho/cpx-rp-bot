@@ -1,8 +1,7 @@
 import {createHash} from 'node:crypto';
-import sharp from 'sharp';
 import {embedMessage,CPX_GREEN} from './embeds.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
-import {documentFontStyle} from './document-font.mjs';
+import {documentFontStyle,loadDocumentRenderer} from './document-font.mjs';
 
 const API='https://discord.com/api/v10';
 const text=(name,description,max=60,required=true)=>({type:3,name,description,required,min_length:required?2:0,max_length:max});
@@ -43,6 +42,7 @@ const base=side=>`<rect width="1400" height="880" rx="38" fill="#eef1df"/><rect 
 const label=(x,y,name,value,width=760,size=27)=>`<text x="${x}" y="${y}" font-size="20" font-weight="800" fill="#153f2d">${escape(name)}</text><rect x="${x}" y="${y+10}" width="${width}" height="56" rx="12" fill="#fff" fill-opacity=".62" stroke="#728474"/><text x="${x+18}" y="${y+48}" font-size="${size}" font-weight="600" fill="#183b2d">${escape(value||'Não informado')}</text>`;
 
 export async function renderCnhCards(data,photo){
+  const sharp=await loadDocumentRenderer();
   const normalized=await sharp(photo).rotate().resize(330,440,{fit:'cover',position:'attention'}).jpeg({quality:88}).toBuffer();
   const image='data:image/jpeg;base64,'+normalized.toString('base64');
   const front=`<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="880"><style>${documentFontStyle}</style>${base('FRENTE')}<rect x="78" y="190" width="354" height="464" rx="20" fill="#d9decf" stroke="#153f2d" stroke-width="6"/><image href="${image}" x="90" y="202" width="330" height="440" preserveAspectRatio="xMidYMid slice"/>${label(470,195,'NOME COMPLETO',data.nome,820)}${label(470,292,'FILIAÇÃO',data.filiacao,820)}${label(470,389,'DATA DE NASCIMENTO',data.nascimento,390)}${label(900,389,'NATURALIDADE',data.naturalidade,390,23)}${label(470,486,'PRIMEIRA HABILITAÇÃO',data.primeira,390)}${label(900,486,'VALIDADE',data.validade,390)}${label(470,583,'NÚMERO DE REGISTRO RP',data.documento,620,25)}<rect x="1120" y="583" width="170" height="112" rx="18" fill="#153f2d"/><text x="1205" y="625" text-anchor="middle" font-size="19" font-weight="700" fill="#fff5c7">CATEGORIA</text><text x="1205" y="675" text-anchor="middle" font-size="45" font-weight="900" fill="#fff">${escape(data.categoria)}</text><text x="255" y="710" text-anchor="middle" font-size="25" font-weight="700" fill="#153f2d">FOTO DO PERSONAGEM</text></svg>`;
