@@ -24,7 +24,7 @@ async function registerStaffCommands(){
  for(const command of staffCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
 }
 async function registerRgCommands(){
- for(const command of [...rgCommands,...cnhExamCommands])await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+e.DISCORD_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
+ for(const command of [...cnhExamCommands,...rgCommands])await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+e.DISCORD_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
 }
 if(e.DISCORD_PUBLIC_KEY&&!/^[0-9a-f]{64}$/i.test(e.DISCORD_PUBLIC_KEY))throw new Error('DISCORD_PUBLIC_KEY inválida.');
 const random=()=>randomBytes(32).toString('hex');

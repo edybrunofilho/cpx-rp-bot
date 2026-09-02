@@ -27,8 +27,8 @@ export const cnhSubcommand={
     ]},
     text('primeira_habilitacao','Data fictícia da primeira habilitação',10),
     text('validade','Data fictícia de validade',10),
-    text('observacoes','Observações da CNH fictícia',80,false),
     {type:5,name:'confirmar',description:'Confirmo que os dados são fictícios e exclusivos para RP',required:true},
+    text('observacoes','Observações da CNH fictícia',80,false),
   ],
 };
 
