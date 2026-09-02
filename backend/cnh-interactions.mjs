@@ -4,6 +4,7 @@ import {fail} from '../lib/cpx/engine.mjs';
 import {documentFontStyle,loadDocumentRenderer} from './document-font.mjs';
 
 const API='https://discord.com/api/v10';
+export const CNH_CHANNEL_ID='1502043278605025363';
 const text=(name,description,max=60,required=true)=>({type:3,name,description,required,min_length:required?2:0,max_length:max});
 
 export const cnhSubcommand={
@@ -57,18 +58,21 @@ async function sendCards(channelId,token,front,back,request=fetch){
   await response.json().catch(()=>({}));if(!response.ok)fail('Não foi possível publicar a CNH. Verifique as permissões do bot no canal.',response.status===403?403:503);
 }
 
-export function createCnhService(e,{request=fetch,renderer=renderCnhCards}={}){
+export function createCnhService(e,{request=fetch,renderer=renderCnhCards,approval}={}){
   return {async execute(i){
     if(i.guild_id!==e.DISCORD_GUILD_ID||!isCnhCommand(i))fail('Utilize /criar cnh no servidor CPX.',403);
     const o=options(i);if(o.confirmar!==true)fail('Confirme que os dados são fictícios e exclusivos para roleplay.');
     for(const [name,value] of [['nascimento',o.nascimento],['primeira habilitação',o.primeira_habilitacao],['validade',o.validade]])if(!validDate(value))fail('Informe a data de '+name+' no formato DD/MM/AAAA.');
+    if(!approval?.claim(i.member.user.id,o.categoria))fail(`Você precisa ser aprovado na categoria ${o.categoria}. Use /cnh iniciar antes de emitir a CNH.`,403);
+    try{
     const attachment=i.data.resolved?.attachments?.[o.foto];
     if(!attachment||!['image/png','image/jpeg','image/webp'].includes(attachment.content_type)||attachment.size>5_000_000)fail('Envie uma foto PNG, JPG ou WebP de até 5 MB.');
     let response;try{response=await request(attachment.url,{signal:AbortSignal.timeout(10000)});}catch{fail('Não foi possível baixar a foto enviada.',503);}if(!response.ok)fail('Não foi possível baixar a foto enviada.',503);
     const photo=Buffer.from(await response.arrayBuffer());if(photo.length>5_000_000)fail('A foto ultrapassa o limite de 5 MB.');
     const data={nome:o.nome_completo,filiacao:o.filiacao,nascimento:o.nascimento,naturalidade:o.naturalidade,categoria:o.categoria,primeira:o.primeira_habilitacao,validade:o.validade,observacoes:o.observacoes||'',documento:documentId(i.member.user.id,i.id),emissao:issued()};
     let cards;try{cards=await renderer(data,photo);}catch{fail('A foto não pôde ser processada. Envie outra imagem.',400);}
-    await sendCards(i.channel_id,e.DISCORD_BOT_TOKEN,cards[0],cards[1],request);
-    return embedMessage('CNH fictícia criada','A frente e o verso foram publicados neste canal.',{fields:[{name:'Categoria',value:data.categoria,inline:true},{name:'Identificador RP',value:data.documento,inline:true},{name:'Aviso',value:'Este documento não possui validade oficial.'}]});
+    await sendCards(CNH_CHANNEL_ID,e.DISCORD_BOT_TOKEN,cards[0],cards[1],request);
+    return embedMessage('CNH fictícia criada',`A frente e o verso foram publicados em <#${CNH_CHANNEL_ID}>.`,{fields:[{name:'Categoria',value:data.categoria,inline:true},{name:'Identificador RP',value:data.documento,inline:true},{name:'Aviso',value:'Este documento não possui validade oficial.'}]});
+    }catch(error){approval.release(i.member.user.id,o.categoria);throw error;}
   }};
 }
