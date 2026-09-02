@@ -5,6 +5,7 @@ import {cnhSubcommand} from './cnh-interactions.mjs';
 import {documentFontStyle,loadDocumentRenderer} from './document-font.mjs';
 
 const API='https://discord.com/api/v10';
+export const RG_CHANNEL_ID='1510811319333425343';
 const text=(name,description,max=60)=>({type:3,name,description,required:true,min_length:2,max_length:max});
 export const rgCommands=[{
   name:'criar',description:'Criar documentos fictícios do Complexo Paulista',type:1,options:[{
@@ -56,7 +57,7 @@ export function createRgService(e,{request=fetch,renderer=renderRgCards}={}){
     const photo=Buffer.from(await response.arrayBuffer());if(photo.length>5_000_000)fail('A foto ultrapassa o limite de 5 MB.');
     const data={nome:o.nome_completo,filiacao1:o.filiacao_1,filiacao2:o.filiacao_2,nascimento:o.nascimento,naturalidade:o.naturalidade,genero:o.genero,profissao:o.profissao,documento:documentId(i.member.user.id,i.id),emissao:issued(),discord:i.member.user.global_name||i.member.user.username,photoType:attachment.content_type};
     let cards;try{cards=await renderer(data,photo);}catch{fail('A foto não pôde ser processada. Envie outra imagem.',400);}
-    const message=await sendCards(i.channel_id,e.DISCORD_BOT_TOKEN,data,cards[0],cards[1],request);
-    return embedMessage('RG fictício criado','A frente e o verso foram publicados neste canal.',{fields:[{name:'Identificador RP',value:data.documento},{name:'Mensagem',value:'Este documento não possui validade oficial.'}]});
+    await sendCards(RG_CHANNEL_ID,e.DISCORD_BOT_TOKEN,data,cards[0],cards[1],request);
+    return embedMessage('RG fictício criado',`A frente e o verso foram publicados em <#${RG_CHANNEL_ID}>.`,{fields:[{name:'Identificador RP',value:data.documento},{name:'Mensagem',value:'Este documento não possui validade oficial.'}]});
   }};
 }
