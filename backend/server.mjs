@@ -9,6 +9,7 @@ import {createGuardianService} from './guardian-service.mjs';
 import {createInteractionHandler} from './interactions.mjs';
 import {staffCommands,STAFF_GUILD_ID} from './staff-interactions.mjs';
 import {bankCommands,BANK_GUILD_ID} from './bank-interactions.mjs';
+import {createBankScheduler} from './bank-scheduler.mjs';
 import {rgCommands} from './rg-interactions.mjs';
 import {cnhExamCommands} from './cnh-exam.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
@@ -20,6 +21,7 @@ const origin=new URL(e.PUBLIC_ORIGIN).origin;if(!origin.startsWith('https://'))t
 const callback=origin+'/api/cpx/auth/callback';
 const dataDir=e.DATA_DIR||'./data';mkdirSync(dataDir,{recursive:true,mode:0o700});
 const store=createStore(join(dataDir,'cpx.sqlite'));const notifier=createNotifier(store,e.DISCORD_BOT_TOKEN);
+const bankScheduler=createBankScheduler(store,e);
 const guardian=createGuardianService(store,e);const owner=createOwnerService(store,e);const interactionHandler=createInteractionHandler(store,guardian,e,fetch,owner);
 async function registerStaffCommands(){
  for(const command of staffCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
@@ -96,8 +98,8 @@ const server=createServer(async(req,res)=>{
  }catch(error){if(!res.headersSent)json(res,{error:error.status?error.message:'O serviço está temporariamente indisponível.'},error.status||503);else res.end();}
 });
 server.requestTimeout=20000;server.headersTimeout=15000;server.maxRequestsPerSocket=100;
-const stop=notifier.start();const stopGuardian=guardian.start();server.listen(Number(e.PORT||3001),'0.0.0.0',()=>console.log('cpx guardian: serviço iniciado. Segredos não são registrados.'));
+const stop=notifier.start();const stopGuardian=guardian.start();const stopBankScheduler=bankScheduler.start();server.listen(Number(e.PORT||3001),'0.0.0.0',()=>console.log('cpx guardian: serviço iniciado. Segredos não são registrados.'));
 registerStaffCommands().then(()=>console.log('Comandos /staff e /player registrados no servidor de staff.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor de staff:',error?.message||error));
 registerBankCommands().then(()=>console.log('Comandos /ver e /banco registrados no servidor bancário '+BANK_GUILD_ID+'.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor bancário:',error?.message||error));
 registerRgCommands().then(()=>console.log('Comandos /criar e /cnh registrados no servidor CPX.')).catch(error=>console.error('Não foi possível registrar os comandos de documentos:',error?.message||error));
-for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{stop();stopGuardian();server.close(()=>{store.db.close();process.exit(0);});});
+for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{stop();stopGuardian();stopBankScheduler();server.close(()=>{store.db.close();process.exit(0);});});
