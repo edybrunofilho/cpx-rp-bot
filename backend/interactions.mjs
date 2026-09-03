@@ -9,6 +9,7 @@ import {createRgService,isRgCommand} from './rg-interactions.mjs';
 import {createCnhService,isCnhCommand} from './cnh-interactions.mjs';
 import {createCnhExamService,isCnhExamInteraction} from './cnh-exam.mjs';
 import {createBankService,isBankCommand,BANK_GUILD_ID} from './bank-interactions.mjs';
+import {createSupportService,isSupportInteraction} from './support-interactions.mjs';
 export function validSignature(raw,signature,timestamp,publicKey,now=Date.now()){
  try{if(!/^[0-9a-f]{128}$/i.test(signature||'')||!/^\d{10,13}$/.test(timestamp||'')||!/^[0-9a-f]{64}$/i.test(publicKey||'')||Math.abs(now-Number(timestamp)*1000)>300000)return false;const key=createPublicKey({key:Buffer.concat([Buffer.from('302a300506032b6570032100','hex'),Buffer.from(publicKey,'hex')]),format:'der',type:'spki'});return verify(null,Buffer.concat([Buffer.from(timestamp),raw]),key,Buffer.from(signature,'hex'));}catch{return false;}
 }
@@ -41,13 +42,14 @@ export async function executeCommand(i,store,service,e){
  if(name==='ticket_fechar'){run({action:'ticket_close',id:o.id});return 'Ticket encerrado.';}
  fail('Função não encontrada. Use /cpx ajuda.');
 }
-export function createInteractionHandler(store,service,e,replyFetch=fetch,owner=null){
+export function createInteractionHandler(store,service,e,replyFetch=fetch,owner=null,supportService=null){
  const windows=new Map();
  const staff=createStaffService(e);
  const rg=createRgService(e);
  const cnhExam=createCnhExamService(store,e);
  const cnh=createCnhService(e,{approval:cnhExam.approval});
  const bank=createBankService(store,e);
+ const support=supportService||createSupportService(store,e);
  return async function(req,res){
   const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>65536){res.writeHead(413);res.end();return;}chunks.push(c);}const raw=Buffer.concat(chunks);
   if(!validSignature(raw,req.headers['x-signature-ed25519'],req.headers['x-signature-timestamp'],e.DISCORD_PUBLIC_KEY)){res.writeHead(401);res.end('Invalid signature');return;}
@@ -66,7 +68,7 @@ export function createInteractionHandler(store,service,e,replyFetch=fetch,owner=
   // Acknowledge before any Discord lookup or AI call (3-second deadline).
   const examRequest=isCnhExamInteraction(i);
   respond(examRequest&&i.type===3?{type:6}:{type:5,data:{flags:64}});
-  let content,status='done';try{content=staffRequest?await staff.execute(i):bankRequest?await bank.execute(i):examRequest?await cnhExam.execute(i):isRgCommand(i)?await rg.execute(i):isCnhCommand(i)?await cnh.execute(i):isOwnerInteraction(i)?await executeOwnerInteraction(i,owner,e):await executeCommand(i,store,service,e);}catch(error){status='failed';content=error.status?error.message:'Não foi possível concluir. Confira o Discord antes de repetir.';}
+  let content,status='done';try{content=staffRequest?await staff.execute(i):bankRequest?await bank.execute(i):isSupportInteraction(i)?await support.execute(i):examRequest?await cnhExam.execute(i):isRgCommand(i)?await rg.execute(i):isCnhCommand(i)?await cnh.execute(i):isOwnerInteraction(i)?await executeOwnerInteraction(i,owner,e):await executeCommand(i,store,service,e);}catch(error){status='failed';content=error.status?error.message:'Não foi possível concluir. Confira o Discord antes de repetir.';}
   store.db.prepare('UPDATE interactions SET status=? WHERE id=?').run(status,i.id);
   try{await replyFetch('https://discord.com/api/v10/webhooks/'+e.DISCORD_CLIENT_ID+'/'+encodeURIComponent(i.token)+'/messages/@original',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(formatReply(content,status==='failed'?'Não foi possível concluir':commandTitle(i),status==='failed')),signal:AbortSignal.timeout(10000)});}catch{/* Do not log interaction tokens; results remain visible in the portal. */}
  };

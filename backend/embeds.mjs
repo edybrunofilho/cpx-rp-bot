@@ -42,6 +42,6 @@ export function announcementMessage(text) {
 export function commandTitle(i) {
   const group = i.data?.options?.[0];
   if (group?.type === 2 && group.name === 'ticket') return 'Atendimento privado';
-  return ({ajuda:'Central de ajuda',portal:'Portal da cidade',status:'Status do serviço',saldo:'Saldo da conta RP',rg:'Registro do personagem',extrato:'Extrato da conta RP',perguntar:'Atendimento',avisos:'Notificações financeiras',transferir:'Transferência RP',ajustar:'Ajuste de saldo RP',pagar:'Pagamento institucional',advertir:'Advertência',castigo:'Restrição temporária',comunicado:'Comunicado do Instaplexo'})[group?.name] ?? 'cpx guardian';
+  const name=i.data?.name==='cpx'?group?.name:i.data?.name;
+  return ({ticketpainel:'Central de Suporte',ajuda:'Central de ajuda',portal:'Portal da cidade',status:'Status do serviço',saldo:'Saldo da conta RP',rg:'Registro do personagem',extrato:'Extrato da conta RP',perguntar:'Atendimento',avisos:'Notificações financeiras',transferir:'Transferência RP',ajustar:'Ajuste de saldo RP',pagar:'Pagamento institucional',advertir:'Advertência',castigo:'Restrição temporária',comunicado:'Comunicado do Instaplexo'})[name] ?? 'cpx guardian';
 }
-

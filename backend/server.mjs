@@ -10,6 +10,7 @@ import {createInteractionHandler} from './interactions.mjs';
 import {staffCommands,STAFF_GUILD_ID} from './staff-interactions.mjs';
 import {bankCommands,BANK_GUILD_ID} from './bank-interactions.mjs';
 import {createBankScheduler} from './bank-scheduler.mjs';
+import {createSupportService,supportCommands,SUPPORT_PANEL_CHANNEL_ID} from './support-interactions.mjs';
 import {rgCommands} from './rg-interactions.mjs';
 import {cnhExamCommands} from './cnh-exam.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
@@ -22,7 +23,7 @@ const callback=origin+'/api/cpx/auth/callback';
 const dataDir=e.DATA_DIR||'./data';mkdirSync(dataDir,{recursive:true,mode:0o700});
 const store=createStore(join(dataDir,'cpx.sqlite'));const notifier=createNotifier(store,e.DISCORD_BOT_TOKEN);
 const bankScheduler=createBankScheduler(store,e);
-const guardian=createGuardianService(store,e);const owner=createOwnerService(store,e);const interactionHandler=createInteractionHandler(store,guardian,e,fetch,owner);
+const guardian=createGuardianService(store,e);const owner=createOwnerService(store,e);const support=createSupportService(store,e);const interactionHandler=createInteractionHandler(store,guardian,e,fetch,owner,support);
 async function registerStaffCommands(){
  for(const command of staffCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
  const oldCommands=await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN);
@@ -32,7 +33,7 @@ async function registerBankCommands(){
  for(const command of bankCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+BANK_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
 }
 async function registerRgCommands(){
- for(const command of [...cnhExamCommands,...rgCommands])await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+e.DISCORD_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
+ for(const command of [...supportCommands,...cnhExamCommands,...rgCommands])await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+e.DISCORD_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
 }
 if(e.DISCORD_PUBLIC_KEY&&!/^[0-9a-f]{64}$/i.test(e.DISCORD_PUBLIC_KEY))throw new Error('DISCORD_PUBLIC_KEY inválida.');
 const random=()=>randomBytes(32).toString('hex');
@@ -101,5 +102,6 @@ server.requestTimeout=20000;server.headersTimeout=15000;server.maxRequestsPerSoc
 const stop=notifier.start();const stopGuardian=guardian.start();const stopBankScheduler=bankScheduler.start();server.listen(Number(e.PORT||3001),'0.0.0.0',()=>console.log('cpx guardian: serviço iniciado. Segredos não são registrados.'));
 registerStaffCommands().then(()=>console.log('Comandos /staff e /player registrados no servidor de staff.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor de staff:',error?.message||error));
 registerBankCommands().then(()=>console.log('Comandos /ver e /banco registrados no servidor bancário '+BANK_GUILD_ID+'.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor bancário:',error?.message||error));
-registerRgCommands().then(()=>console.log('Comandos /criar e /cnh registrados no servidor CPX.')).catch(error=>console.error('Não foi possível registrar os comandos de documentos:',error?.message||error));
+registerRgCommands().then(()=>console.log('Comandos /ticketpainel, /criar e /cnh registrados no servidor CPX.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor CPX:',error?.message||error));
+support.ensureAutomaticPanel().then(created=>console.log(created?'Central de Suporte publicada automaticamente em '+SUPPORT_PANEL_CHANNEL_ID+'.':'Central de Suporte automática já está publicada.')).catch(error=>console.error('Não foi possível publicar a Central de Suporte automática:',error?.message||error));
 for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{stop();stopGuardian();stopBankScheduler();server.close(()=>{store.db.close();process.exit(0);});});
