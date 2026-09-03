@@ -8,6 +8,7 @@ import {createNotifier,discord} from './bot.mjs';
 import {createGuardianService} from './guardian-service.mjs';
 import {createInteractionHandler} from './interactions.mjs';
 import {staffCommands,STAFF_GUILD_ID} from './staff-interactions.mjs';
+import {bankCommands,BANK_GUILD_ID} from './bank-interactions.mjs';
 import {rgCommands} from './rg-interactions.mjs';
 import {cnhExamCommands} from './cnh-exam.mjs';
 import {fail} from '../lib/cpx/engine.mjs';
@@ -22,6 +23,11 @@ const store=createStore(join(dataDir,'cpx.sqlite'));const notifier=createNotifie
 const guardian=createGuardianService(store,e);const owner=createOwnerService(store,e);const interactionHandler=createInteractionHandler(store,guardian,e,fetch,owner);
 async function registerStaffCommands(){
  for(const command of staffCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
+ const oldCommands=await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN);
+ for(const command of oldCommands.filter(command=>['ver','banco'].includes(command.name)))await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+STAFF_GUILD_ID+'/commands/'+command.id,e.DISCORD_BOT_TOKEN,{method:'DELETE'});
+}
+async function registerBankCommands(){
+ for(const command of bankCommands)await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+BANK_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
 }
 async function registerRgCommands(){
  for(const command of [...cnhExamCommands,...rgCommands])await discord('/applications/'+e.DISCORD_CLIENT_ID+'/guilds/'+e.DISCORD_GUILD_ID+'/commands',e.DISCORD_BOT_TOKEN,{method:'POST',body:JSON.stringify(command)});
@@ -92,5 +98,6 @@ const server=createServer(async(req,res)=>{
 server.requestTimeout=20000;server.headersTimeout=15000;server.maxRequestsPerSocket=100;
 const stop=notifier.start();const stopGuardian=guardian.start();server.listen(Number(e.PORT||3001),'0.0.0.0',()=>console.log('cpx guardian: serviço iniciado. Segredos não são registrados.'));
 registerStaffCommands().then(()=>console.log('Comandos /staff e /player registrados no servidor de staff.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor de staff:',error?.message||error));
+registerBankCommands().then(()=>console.log('Comandos /ver e /banco registrados no servidor bancário '+BANK_GUILD_ID+'.')).catch(error=>console.error('Não foi possível registrar os comandos do servidor bancário:',error?.message||error));
 registerRgCommands().then(()=>console.log('Comandos /criar e /cnh registrados no servidor CPX.')).catch(error=>console.error('Não foi possível registrar os comandos de documentos:',error?.message||error));
 for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{stop();stopGuardian();server.close(()=>{store.db.close();process.exit(0);});});

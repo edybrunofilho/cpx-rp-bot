@@ -26,7 +26,7 @@ export function createStore(filename){
   register(user){return transaction(()=>{const state=get();let me=state.players.find(p=>p.id===user.id);if(!me){me={id:user.id,name:user.global_name||user.username,handle:user.username,balance:0,rg:'CPX-'+String(state.players.length+1).padStart(4,'0'),birth:'2000-01-01',job:'Cidadão',photo:'',notifications:false};state.players.push(me);}me.handle=user.username;if(!me.photo||me.photo.startsWith('https://cdn.discordapp.com/'))me.photo=user.avatar?`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`:'';save(state);return me;});},
   action(actor,input){
    if(!/^[a-f0-9-]{36}$/.test(input.requestId||''))fail('Identificador da operação inválido.');
-   const {demoRole,...clean}=input;const payloadHash=hash(JSON.stringify(clean));
+   const {demoRole,forceNotifications=false,...clean}=input;const payloadHash=hash(JSON.stringify(forceNotifications?{...clean,forceNotifications:true}:clean));
    return transaction(()=>{
     const receipt=db.prepare('SELECT payload_hash FROM receipts WHERE actor=? AND request_id=?').get(actor.id,input.requestId);
     if(receipt){if(receipt.payload_hash!==payloadHash)fail('O identificador já foi usado para outra operação.',409);return snapshot(actor);}
@@ -35,8 +35,8 @@ export function createStore(filename){
     const {events}=applyAction(state,{...actor,demo:false},clean);
     for(const tx of events){
      db.prepare('INSERT INTO ledger(id,data,created) VALUES(?,?,?)').run(tx.id,JSON.stringify(tx),Date.now());
-     for(const id of [tx.from,tx.to]){const player=state.players.find(p=>p.id===id);if(!player?.notifications)continue;
-      const content={txId:tx.id,amount:tx.amount,reason:tx.reason,direction:tx.to===id?'credit':'debit',balance:player.balance,at:tx.at};
+     for(const id of [tx.from,tx.to]){const player=state.players.find(p=>p.id===id);if(!player||(!forceNotifications&&!player.notifications))continue;
+      const content={txId:tx.id,amount:tx.amount,reason:tx.reason,direction:tx.to===id?'credit':'debit',balance:player.balance,at:tx.at,forced:forceNotifications};
       db.prepare('INSERT INTO outbox(id,tx_id,user_id,payload) VALUES(?,?,?,?)').run(randomUUID(),tx.id,id,JSON.stringify(content));
      }
     }

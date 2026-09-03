@@ -13,10 +13,10 @@ export function createNotifier(store,token,send=discord){
   if(working||Date.now()<pausedUntil)return;working=true;
   try{
    const job=store.db.prepare("SELECT * FROM outbox WHERE status='queued' AND next_attempt<=? ORDER BY rowid LIMIT 1").get(Date.now());if(!job)return;
-   const player=store.get().players.find(p=>p.id===job.user_id);
-   if(!player?.notifications){store.db.prepare("UPDATE outbox SET status='cancelled',error='Notificações desativadas pelo jogador' WHERE id=?").run(job.id);return;}
+   const player=store.get().players.find(p=>p.id===job.user_id);const p=JSON.parse(job.payload);
+   if(!player||(!player.notifications&&!p.forced)){store.db.prepare("UPDATE outbox SET status='cancelled',error='Notificações desativadas pelo jogador' WHERE id=?").run(job.id);return;}
    try{
-    const p=JSON.parse(job.payload);const channel=await send('/users/@me/channels',token,{method:'POST',body:JSON.stringify({recipient_id:job.user_id})});
+    const channel=await send('/users/@me/channels',token,{method:'POST',body:JSON.stringify({recipient_id:job.user_id})});
     await send('/channels/'+channel.id+'/messages',token,{method:'POST',body:JSON.stringify({nonce:job.id.replaceAll('-','').slice(0,25),enforce_nonce:true,allowed_mentions:{parse:[]},embeds:[{title:p.direction==='credit'?'Você recebeu dinheiro RP':'Movimentação de saída RP',description:'Uma movimentação foi registrada na sua conta CPX. Valores fictícios, exclusivos do roleplay.',color:p.direction==='credit'?0xe6c62a:0xb86a49,fields:[{name:'Valor RP',value:money(p.amount),inline:true},{name:'Saldo após a operação',value:money(p.balance),inline:true},{name:'Motivo',value:p.reason},{name:'Comprovante',value:p.txId}],footer:{text:'cpx guardian • Desative estes avisos no portal, em Conexão Discord.'},timestamp:p.at}]})});
     store.db.prepare("UPDATE outbox SET status='sent',attempts=attempts+1,error=NULL WHERE id=?").run(job.id);
    }catch(e){
@@ -29,4 +29,3 @@ export function createNotifier(store,token,send=discord){
  }
  return {tick,start(){const timer=setInterval(()=>tick().catch(()=>{}),1500);return()=>clearInterval(timer);}};
 }
-
